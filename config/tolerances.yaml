@@ -1,0 +1,15 @@
+default:
+  price_pct: 0.5
+  timestamp_ms: 100
+
+equity:
+  price_pct: 0.5
+  timestamp_ms: 100
+
+fx:
+  price_pct: 0.1
+  timestamp_ms: 50
+
+fixed_income:
+  price_pct: 1.0
+  timestamp_ms: 500
