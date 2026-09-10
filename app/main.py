@@ -21,6 +21,7 @@ RECONCILIATION_LATENCY_SECONDS = Histogram('traderecon_reconciliation_latency_se
 
 TEST_HTTP_REQUESTS_TOTAL = Counter('traderecon_http_requests_total', 'Total HTTP requests to Flask app')
 OPEN_ESCALATIONS = Gauge('traderecon_open_escalations', 'Count of open CRITICAL escalations')
+RECONCILIATION_RATE = Gauge('traderecon_reconciliation_rate', 'Reconciliation rate without flags', ['window'])
 
 reconciliation_engine = ReconciliationEngine(db_url=DB_URL)
 report_generator = ReportGenerator(db_url=DB_URL, template_dir='./reports/templates')
@@ -202,6 +203,17 @@ def stop_consumers():
         consumer.join()
     print("All Kafka consumer threads stopped.")
 
+def update_kpi_metrics():
+    while True:
+        try:
+            kpis = report_generator.get_reconciliation_kpis()
+            RECONCILIATION_RATE.labels('today').set(kpis['today_rate'])
+            RECONCILIATION_RATE.labels('7d').set(kpis['7d_rate'])
+        except Exception as e:
+            print(f"Error updating KPI metrics: {e}")
+        time.sleep(60)
+
+
 if __name__ == '__main__':
     start_http_server(8000, addr='0.0.0.0')
 
@@ -209,6 +221,9 @@ if __name__ == '__main__':
 
     consumer_thread = threading.Thread(target=start_consumers)
     consumer_thread.start()
+    
+    kpi_thread = threading.Thread(target=update_kpi_metrics, daemon=True)
+    kpi_thread.start()
 
     try:
         app.run(debug=False, host='0.0.0.0', port=5000)

@@ -71,6 +71,8 @@ class ReportGenerator:
         matched_trades = [t for t in report_data if t['status'] == 'MATCHED']
         mismatched_trades = [t for t in report_data if t['status'] == 'MISMATCHED']
         anomalous_count = len([t for t in report_data if t.get('is_anomalous')])
+        
+        kpis = self.get_reconciliation_kpis()
 
         html_content = template.render(
             report_timestamp=datetime.now().isoformat(timespec='seconds'),
@@ -79,7 +81,9 @@ class ReportGenerator:
             mismatched_count=len(mismatched_trades),
             anomalous_count=anomalous_count,
             matched_trades=matched_trades,
-            mismatched_trades=mismatched_trades
+            mismatched_trades=mismatched_trades,
+            today_rate=kpis['today_rate'],
+            weekly_rate=kpis['7d_rate']
         )
 
         if filename:
@@ -186,3 +190,48 @@ class ReportGenerator:
             return None
         finally:
             session.close()
+
+    def get_reconciliation_kpis(self):
+        from sqlalchemy import or_, and_, func
+        from datetime import timedelta
+        
+        session = self._get_session()
+        try:
+            now = datetime.utcnow()
+            start_of_today = datetime.combine(now.date(), datetime.min.time())
+            start_of_7d = now - timedelta(days=7)
+            
+            def calculate_rate(start_time):
+                base_query = session.query(ReconciliationResult).filter(
+                    ReconciliationResult.reconciliation_timestamp >= start_time
+                )
+                total = base_query.count()
+                
+                if total == 0:
+                    return 0.0
+                
+                auto_matched = base_query.filter(
+                    and_(
+                        ReconciliationResult.status == 'MATCHED',
+                        or_(
+                            ReconciliationResult.is_anomalous == False,
+                            ReconciliationResult.is_anomalous.is_(None)
+                        )
+                    )
+                ).count()
+                
+                return (auto_matched / total) * 100.0
+                
+            rate_today = calculate_rate(start_of_today)
+            rate_7d = calculate_rate(start_of_7d)
+            
+            return {
+                'today_rate': rate_today,
+                '7d_rate': rate_7d
+            }
+        except Exception as e:
+            print(f"Error calculating KPIs: {e}")
+            return {'today_rate': 0.0, '7d_rate': 0.0}
+        finally:
+            session.close()
+
