@@ -45,6 +45,14 @@ class ReconciliationResult(Base):
 
     def __repr__(self):
         return f"<ReconciliationResult(trade_id='{self.trade_id}', status='{self.status}')>"
+
+class EODSignOff(Base):
+    __tablename__ = 'eod_signoffs'
+    id = Column(Integer, primary_key=True)
+    reviewer_name = Column(String, nullable=False)
+    report_date = Column(String, nullable=False) # e.g. YYYY-MM-DD
+    signoff_timestamp = Column(DateTime, default=datetime.utcnow)
+
 class ReconciliationEngine:
     """
     Core engine for real-time trade reconciliation.

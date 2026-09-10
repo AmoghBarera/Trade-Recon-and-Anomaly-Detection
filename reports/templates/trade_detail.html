@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade Detail - {{ trade.trade_id }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #333; }
+        .container { max-width: 1400px; margin: 2rem auto; padding: 1.5rem; background-color: #ffffff; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+        .data-card { border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1.5rem; background-color: #f8fafc; }
+        .data-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0; }
+        .data-row:last-child { border-bottom: none; }
+        .data-label { font-weight: 600; color: #4a5568; }
+        .highlight-mismatch { background-color: #fee2e2; color: #b91c1c; font-weight: 700; padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold">Trade Detail: {{ trade.trade_id }}</h1>
+                <p class="text-gray-500 mt-2">Ticker: {{ trade.ticker }} | Asset Class: {{ trade.asset_class or 'N/A' }} | Status: <span class="{% if trade.status == 'MATCHED' %}text-green-600{% else %}text-red-600{% endif %} font-bold">{{ trade.status }}</span></p>
+            </div>
+            <a href="javascript:history.back()" class="text-blue-600 hover:underline">&larr; Back to Audit Log</a>
+        </div>
+
+        {% if trade.mismatch_details %}
+        <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+            <h3 class="text-red-800 font-bold mb-2">Mismatches Detected (Highest Severity: {{ trade.highest_severity }})</h3>
+            <ul class="list-disc ml-5 text-red-700">
+                {% for mismatch in trade.mismatch_details %}
+                <li><strong>{{ mismatch.field }}</strong>: {{ mismatch.reason }} (Severity: {{ mismatch.severity }})</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if trade.is_anomalous %}
+        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
+            <h3 class="text-yellow-800 font-bold">Anomaly Detected</h3>
+            <p class="text-yellow-700">Anomaly Score: {{ trade.anomaly_score }}</p>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Execution Data -->
+            <div class="data-card">
+                <h2 class="text-xl font-bold mb-4 text-blue-800 border-b pb-2">Execution Record</h2>
+                {% if trade.execution_data %}
+                    <div class="data-row">
+                        <span class="data-label">Quantity</span>
+                        <span class="{% if 'quantity' in mismatched_fields %}highlight-mismatch{% endif %}">{{ trade.execution_data.get('quantity') }}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Price</span>
+                        <span class="{% if 'price' in mismatched_fields %}highlight-mismatch{% endif %}">{{ trade.execution_data.get('price') }}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Timestamp</span>
+                        <span class="{% if 'timestamp' in mismatched_fields %}highlight-mismatch{% endif %}">{{ trade.execution_data.get('timestamp') }}</span>
+                    </div>
+                    <!-- Other raw fields if any -->
+                    {% for k, v in trade.execution_data.items() %}
+                        {% if k not in ['quantity', 'price', 'timestamp', 'trade_id', 'ticker', 'asset_class'] %}
+                        <div class="data-row">
+                            <span class="data-label">{{ k }}</span>
+                            <span>{{ v }}</span>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <p class="text-gray-500 italic">No execution data received.</p>
+                {% endif %}
+            </div>
+
+            <!-- Confirmation Data -->
+            <div class="data-card">
+                <h2 class="text-xl font-bold mb-4 text-green-800 border-b pb-2">Confirmation Record</h2>
+                {% if trade.confirmation_data %}
+                    <div class="data-row">
+                        <span class="data-label">Quantity</span>
+                        <span class="{% if 'quantity' in mismatched_fields %}highlight-mismatch{% endif %}">{{ trade.confirmation_data.get('quantity') }}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Price</span>
+                        <span class="{% if 'price' in mismatched_fields %}highlight-mismatch{% endif %}">{{ trade.confirmation_data.get('price') }}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Timestamp</span>
+                        <span class="{% if 'timestamp' in mismatched_fields %}highlight-mismatch{% endif %}">{{ trade.confirmation_data.get('timestamp') }}</span>
+                    </div>
+                    <!-- Other raw fields if any -->
+                    {% for k, v in trade.confirmation_data.items() %}
+                        {% if k not in ['quantity', 'price', 'timestamp', 'trade_id', 'ticker'] %}
+                        <div class="data-row">
+                            <span class="data-label">{{ k }}</span>
+                            <span>{{ v }}</span>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <p class="text-gray-500 italic">No confirmation data received.</p>
+                {% endif %}
+            </div>
+
+            <!-- PnL Data -->
+            <div class="data-card">
+                <h2 class="text-xl font-bold mb-4 text-purple-800 border-b pb-2">PnL Snapshot</h2>
+                {% if trade.pnl_data %}
+                    <div class="data-row">
+                        <span class="data-label">PnL Impact</span>
+                        <span class="{% if 'pnl_consistency' in mismatched_fields %}highlight-mismatch{% endif %}">{{ trade.pnl_data.get('pnl_impact') }}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Commission</span>
+                        <span class="{% if 'pnl_consistency' in mismatched_fields %}highlight-mismatch{% endif %}">{{ trade.pnl_data.get('commission') }}</span>
+                    </div>
+                    <!-- Other raw fields if any -->
+                    {% for k, v in trade.pnl_data.items() %}
+                        {% if k not in ['pnl_impact', 'commission', 'trade_id', 'ticker'] %}
+                        <div class="data-row">
+                            <span class="data-label">{{ k }}</span>
+                            <span>{{ v }}</span>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <p class="text-gray-500 italic">No PnL data received.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

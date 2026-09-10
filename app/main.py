@@ -56,6 +56,113 @@ def download_csv():
     csv_filepath = os.path.join(report_generator.report_output_dir, csv_filename)
     return send_file(csv_filepath, as_attachment=True, download_name='TradeRecon_Report.csv', mimetype='text/csv')
 
+import math
+import pandas as pd
+
+@app.route('/audit-log')
+def audit_log():
+    TEST_HTTP_REQUESTS_TOTAL.inc()
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    trade_id = request.args.get('trade_id')
+    asset_class = request.args.get('asset_class')
+    highest_severity = request.args.get('highest_severity')
+    status = request.args.get('status')
+
+    data, total_count = report_generator.get_filtered_audit_log(
+        page=page, per_page=per_page, start_date=start_date, end_date=end_date,
+        trade_id=trade_id, asset_class=asset_class, highest_severity=highest_severity, status=status
+    )
+    
+    total_pages = math.ceil(total_count / per_page)
+    
+    return render_template('audit_log.html', 
+                           data=data, 
+                           page=page, 
+                           total_pages=total_pages,
+                           request_args=request.args)
+
+@app.route('/audit-log/export')
+def export_audit_log():
+    TEST_HTTP_REQUESTS_TOTAL.inc()
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    trade_id = request.args.get('trade_id')
+    asset_class = request.args.get('asset_class')
+    highest_severity = request.args.get('highest_severity')
+    status = request.args.get('status')
+
+    # Get all results for export, without pagination
+    data, _ = report_generator.get_filtered_audit_log(
+        page=1, per_page=1000000, start_date=start_date, end_date=end_date,
+        trade_id=trade_id, asset_class=asset_class, highest_severity=highest_severity, status=status
+    )
+    
+    df = pd.DataFrame(data)
+    if not df.empty:
+        df['mismatch_summary'] = df['mismatch_details'].apply(
+            lambda x: ', '.join([f"{d['field']}: {d['reason']}" for d in x]) if isinstance(x, list) and x else 'N/A'
+        )
+    
+    csv_filename = 'audit_log_export.csv'
+    csv_filepath = os.path.join(report_generator.report_output_dir, csv_filename)
+    df.to_csv(csv_filepath, index=False)
+    
+    return send_file(csv_filepath, as_attachment=True, download_name='Audit_Log_Export.csv', mimetype='text/csv')
+
+@app.route('/audit-log/<trade_id>')
+def trade_detail(trade_id):
+    TEST_HTTP_REQUESTS_TOTAL.inc()
+    trade = report_generator.get_trade_by_id(trade_id)
+    if not trade:
+        return "Trade not found", 404
+        
+    mismatched_fields = [m.get('field') for m in trade.mismatch_details] if trade.mismatch_details else []
+    
+    return render_template('trade_detail.html', trade=trade, mismatched_fields=mismatched_fields)
+
+from .pdf_generator import PDFGenerator
+from .reconcile import EODSignOff
+from datetime import datetime as dt_module
+
+pdf_generator = PDFGenerator(db_url=DB_URL)
+
+from flask import redirect
+
+@app.route('/sign-off', methods=['POST'])
+def sign_off():
+    TEST_HTTP_REQUESTS_TOTAL.inc()
+    reviewer_name = request.form.get('reviewer_name')
+    if not reviewer_name:
+        return "Reviewer name is required", 400
+        
+    date_str = dt_module.utcnow().date().strftime('%Y-%m-%d')
+    
+    session = reconciliation_engine.session
+    try:
+        signoff = EODSignOff(reviewer_name=reviewer_name, report_date=date_str)
+        session.add(signoff)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        return f"Error saving sign-off: {e}", 500
+        
+    # Redirect back to the dashboard
+    return request.environ.get('HTTP_REFERER') and redirect(request.environ.get('HTTP_REFERER')) or "Sign-off successful! <a href='/'>Back to Dashboard</a>"
+
+@app.route('/generate-eod-report')
+
+def generate_eod_report():
+    TEST_HTTP_REQUESTS_TOTAL.inc()
+    try:
+        # Defaults to today
+        filepath = pdf_generator.generate_eod_report()
+        return send_file(filepath, as_attachment=True)
+    except Exception as e:
+        return f"Error generating PDF: {e}", 500
+
 def start_consumers():
     print("Starting Kafka consumers...")
     execution_consumer = TradeDataConsumer(

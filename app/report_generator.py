@@ -101,3 +101,88 @@ class ReportGenerator:
         filepath = os.path.join(self.report_output_dir, filename)
         df.to_csv(filepath, index=False)
         print(f"CSV report saved to {filepath}")
+
+    def get_filtered_audit_log(self, page=1, per_page=50, start_date=None, end_date=None, trade_id=None, asset_class=None, highest_severity=None, status=None):
+        session = self._get_session()
+        try:
+            query = session.query(ReconciliationResult)
+
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                    query = query.filter(ReconciliationResult.reconciliation_timestamp >= start_dt)
+                except ValueError:
+                    pass
+            
+            if end_date:
+                try:
+                    # Include the whole end date
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+                    query = query.filter(ReconciliationResult.reconciliation_timestamp <= end_dt)
+                except ValueError:
+                    pass
+
+            if trade_id:
+                query = query.filter(ReconciliationResult.trade_id.ilike(f"%{trade_id}%"))
+            
+            if asset_class:
+                query = query.filter(ReconciliationResult.asset_class == asset_class)
+
+            if highest_severity:
+                query = query.filter(ReconciliationResult.highest_severity == highest_severity)
+
+            if status:
+                query = query.filter(ReconciliationResult.status == status)
+
+            # Order by most recent first
+            query = query.order_by(ReconciliationResult.reconciliation_timestamp.desc())
+
+            total_count = query.count()
+            
+            # Pagination
+            offset = (page - 1) * per_page
+            results = query.offset(offset).limit(per_page).all()
+            
+            # Use same formatting as fetch_all_reconciliation_results
+            data = []
+            for r in results:
+                mismatch_details = r.mismatch_details if r.mismatch_details is not None else []
+                row = {
+                    'id': r.id,
+                    'trade_id': r.trade_id,
+                    'ticker': r.ticker,
+                    'status': r.status,
+                    'reconciliation_timestamp': r.reconciliation_timestamp.isoformat(),
+                    'execution_qty': r.execution_data.get('quantity') if r.execution_data else None,
+                    'execution_price': r.execution_data.get('price') if r.execution_data else None,
+                    'execution_timestamp': r.execution_data.get('timestamp') if r.execution_data else None,
+                    'confirmation_qty': r.confirmation_data.get('quantity') if r.confirmation_data else None,
+                    'confirmation_price': r.confirmation_data.get('price') if r.confirmation_data else None,
+                    'confirmation_timestamp': r.confirmation_data.get('timestamp') if r.confirmation_data else None,
+                    'pnl_impact': r.pnl_data.get('pnl_impact') if r.pnl_data else None,
+                    'commission': r.pnl_data.get('commission') if r.pnl_data else None,
+                    'mismatch_details': mismatch_details,
+                    'is_anomalous': r.is_anomalous,
+                    'anomaly_score': r.anomaly_score,
+                    'asset_class': r.asset_class,
+                    'applied_tolerance': r.applied_tolerance,
+                    'highest_severity': r.highest_severity
+                }
+                data.append(row)
+            
+            return data, total_count
+        except Exception as e:
+            print(f"Error fetching filtered audit log: {e}")
+            return [], 0
+        finally:
+            session.close()
+
+    def get_trade_by_id(self, trade_id):
+        session = self._get_session()
+        try:
+            return session.query(ReconciliationResult).filter_by(trade_id=trade_id).first()
+        except Exception as e:
+            print(f"Error fetching trade {trade_id}: {e}")
+            return None
+        finally:
+            session.close()

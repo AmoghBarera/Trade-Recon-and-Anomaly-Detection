@@ -146,6 +146,23 @@
             </div>
         </div>
 
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-8 flex justify-between items-center">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800 mb-2">End-of-Day PDF Report</h2>
+                <p class="text-sm text-gray-600 mb-4">Generate a printable summary of today's reconciliations and critical escalations.</p>
+                <form action="/sign-off" method="POST" class="flex items-center gap-2">
+                    <input type="text" name="reviewer_name" placeholder="Reviewer Name" required class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <button type="submit" class="btn btn-secondary text-sm">Sign-Off</button>
+                </form>
+            </div>
+            <div>
+                <a href="/generate-eod-report" class="btn btn-primary" target="_blank">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
+                    Download EOD PDF
+                </a>
+            </div>
+        </div>
+
         <div class="flex justify-between items-end mb-4">
             <h2 class="text-2xl">Mismatched Trades ({{ mismatched_count }})</h2>
             <div>
